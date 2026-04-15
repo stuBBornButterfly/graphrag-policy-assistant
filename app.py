@@ -7,16 +7,80 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import json
 import re
+import PyPDF2
+import tempfile
+import os
 
 st.set_page_config(page_title="Policy GraphRAG", page_icon="🏛️", layout="wide")
 
 st.title("🏛️ Bangladesh Education Policy — GraphRAG Assistant")
 st.caption("Multi-agent system powered by LLaMA 3.1 + ChromaDB + Knowledge Graph")
 
+# ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("Groq API Key", type="password")
     st.markdown("Get a free key at [console.groq.com](https://console.groq.com)")
+    st.divider()
+
+    st.markdown("### 📄 Upload Your Own PDFs")
+    uploaded_files = st.file_uploader(
+        "Upload policy PDFs",
+        type=["pdf"],
+        accept_multiple_files=True
+    )
+
+    if uploaded_files:
+        if st.button("⚙️ Process PDFs", type="secondary"):
+            with st.spinner("Extracting text from PDFs..."):
+                new_chunks = []
+                for uploaded_file in uploaded_files:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                        tmp.write(uploaded_file.getbuffer())
+                        tmp_path = tmp.name
+                    try:
+                        reader    = PyPDF2.PdfReader(tmp_path)
+                        full_text = ""
+                        for page in reader.pages:
+                            full_text += page.extract_text() + " "
+                    except Exception as e:
+                        st.error(f"Could not read {uploaded_file.name}: {e}")
+                        continue
+                    finally:
+                        os.unlink(tmp_path)
+
+                    words   = full_text.split()
+                    start   = 0
+                    chunk_i = 0
+                    while start < len(words):
+                        end   = min(start + 100, len(words))
+                        chunk = " ".join(words[start:end])
+                        new_chunks.append({
+                            "chunk_id": f"upload_{uploaded_file.name}_{chunk_i}",
+                            "doc_id"  : f"upload_{uploaded_file.name}",
+                            "year"    : 0,
+                            "title"   : uploaded_file.name,
+                            "text"    : chunk
+                        })
+                        start   += 80
+                        chunk_i += 1
+
+                if new_chunks:
+                    texts      = [c["text"]     for c in new_chunks]
+                    ids        = [c["chunk_id"] for c in new_chunks]
+                    metadatas  = [{"doc_id": c["doc_id"],
+                                   "year"  : c["year"],
+                                   "title" : c["title"]} for c in new_chunks]
+                    embeddings = embed_model.encode(texts).tolist()
+                    collection.add(
+                        ids        = ids,
+                        embeddings = embeddings,
+                        documents  = texts,
+                        metadatas  = metadatas
+                    )
+                    st.success(f"✅ Added {len(new_chunks)} chunks from {len(uploaded_files)} PDF(s)!")
+                    st.caption("Now ask questions — your PDFs are included!")
+
     st.divider()
     st.markdown("### 🤖 Active Agents")
     st.markdown("🕐 **TimeAgent** — tracks changes over time")
@@ -24,6 +88,7 @@ with st.sidebar:
     st.markdown("💡 **ImpactAgent** — traces cause & effect")
     st.markdown("🛡️ **GroundingAgent** — verifies claims")
 
+# ── Policy Documents ──────────────────────────────────────
 policy_documents = [
     {"id":"doc_2015","year":2015,"title":"National Education Policy 2015",
      "content":"The Ministry of Education of Bangladesh approved the Girls Stipend Program expansion in 2015. The program allocated 500 crore BDT from the national budget to increase female enrollment. The Finance Ministry approved the budget under World Bank loan WB-2015-EDU. Target: increase girls enrollment by 20% in rural areas by 2018. Primary schools in Sylhet and Rajshahi divisions received priority funding. The policy was signed by Education Minister Abdul Momen on March 15, 2015."},
@@ -37,6 +102,7 @@ policy_documents = [
      "content":"Building on the Girls Stipend Program success a new Gender Equity in STEM initiative launched. Target: 40% female enrollment in engineering and technology programs by 2030. Budget allocation of 1200 crore BDT approved for the next 6 years. Digital literacy program expanded to cover all 64 districts of Bangladesh. UNICEF and UNESCO partnership renewed for teacher quality improvement. New metric: track not just enrollment but graduation and employment outcomes."}
 ]
 
+# ── Entity colors ─────────────────────────────────────────
 entity_colors = {
     "PROGRAM":      "#4CAF50",
     "PERSON":       "#2196F3",
@@ -47,6 +113,7 @@ entity_colors = {
     "OTHER":        "#9E9E9E"
 }
 
+# ── Load models ───────────────────────────────────────────
 @st.cache_resource
 def load_models():
     embed_model   = SentenceTransformer("all-MiniLM-L6-v2")
@@ -79,6 +146,7 @@ def load_models():
 
 embed_model, collection = load_models()
 
+# ── Graph helpers ─────────────────────────────────────────
 def build_graph(extracted_data):
     G = nx.DiGraph()
     for doc_id, data in extracted_data.items():
@@ -120,6 +188,7 @@ def draw_graph(G):
     plt.tight_layout()
     return fig
 
+# ── Helpers ───────────────────────────────────────────────
 def retrieve(query, n=4):
     emb = embed_model.encode([query]).tolist()
     res = collection.query(query_embeddings=emb, n_results=n)
@@ -138,9 +207,10 @@ def ask_llm(client, system, user, max_tokens=250):
     )
     return r.choices[0].message.content
 
+# ── Tabs ──────────────────────────────────────────────────
 tab1, tab2 = st.tabs(["💬 Ask Agents", "🕸️ Knowledge Graph"])
 
-# ══════════════════ TAB 1 ═══════════════════════════════
+# ══════════════════ TAB 1 ════════════════════════════════
 with tab1:
     st.divider()
     question = st.text_input(
@@ -207,7 +277,7 @@ with tab1:
     elif not api_key:
         st.info("👈 Enter your Groq API key in the sidebar to get started.")
 
-# ══════════════════ TAB 2 ═══════════════════════════════
+# ══════════════════ TAB 2 ════════════════════════════════
 with tab2:
     st.subheader("🕸️ Entity Knowledge Graph")
     st.caption("Extracted from all 5 policy documents — nodes sized by number of connections")
