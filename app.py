@@ -254,18 +254,21 @@ Return only JSON, nothing else."""
 
             G = build_graph(extracted_data)
 
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Entities",      G.number_of_nodes())
-            col2.metric("Total Relationships", G.number_of_edges())
-            top_node = sorted(G.degree(), key=lambda x: x[1], reverse=True)[0]
-            col3.metric("Most Connected Node", f"{top_node[0]} ({top_node[1]} links)")
+            if G.number_of_nodes() == 0:
+                st.error("⚠️ No entities extracted. The LLM returned unparseable JSON. Try clicking Build again.")
+            else:
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Entities",      G.number_of_nodes())
+                col2.metric("Total Relationships", G.number_of_edges())
+                top_node = sorted(G.degree(), key=lambda x: x[1], reverse=True)[0]
+                col3.metric("Most Connected Node", f"{top_node[0]} ({top_node[1]} links)")
 
-            fig = draw_graph(G)
-            st.pyplot(fig)
+                fig = draw_graph(G)
+                st.pyplot(fig)
 
-            st.subheader("🏆 Top 10 Most Connected Entities")
-            top10      = sorted(G.degree(), key=lambda x: x[1], reverse=True)[:10]
-            table_data = [{"Entity"     : n,
-                           "Type"       : G.nodes[n].get("entity_type", "UNKNOWN"),
-                           "Connections": d} for n, d in top10]
-            st.table(table_data)
+                st.subheader("🏆 Top 10 Most Connected Entities")
+                top10      = sorted(G.degree(), key=lambda x: x[1], reverse=True)[:10]
+                table_data = [{"Entity"     : n,
+                               "Type"       : G.nodes[n].get("entity_type", "UNKNOWN"),
+                               "Connections": d} for n, d in top10]
+                st.table(table_data)
