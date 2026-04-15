@@ -78,10 +78,19 @@ embed_model, collection = load_models()
 # ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Settings")
-    api_key = st.text_input("Groq API Key", type="password")
-    st.markdown("Get a free key at [console.groq.com](https://console.groq.com)")
+
+    # ── Option D: Load from Streamlit secrets, fallback to manual input ──
+    secret_key = st.secrets.get("GROQ_API_KEY", "")
+    if secret_key:
+        api_key = secret_key
+        st.success("🔑 API key loaded!")
+    else:
+        api_key = st.text_input("Groq API Key", type="password")
+        st.markdown("Get a free key at [console.groq.com](https://console.groq.com)")
+
     st.divider()
 
+    # ── PDF Upload ────────────────────────────────────────
     st.markdown("### 📄 Upload Your Own PDFs")
     uploaded_files = st.file_uploader(
         "Upload policy PDFs",
