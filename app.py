@@ -1,4 +1,4 @@
-app_code = '''import streamlit as st
+import streamlit as st
 from groq import Groq
 from sentence_transformers import SentenceTransformer
 import chromadb
@@ -8,17 +8,11 @@ import matplotlib.patches as mpatches
 import json
 import re
 
-# ── Page config ──────────────────────────────────────────
-st.set_page_config(
-    page_title = "Policy GraphRAG",
-    page_icon  = "🏛️",
-    layout     = "wide"
-)
+st.set_page_config(page_title="Policy GraphRAG", page_icon="🏛️", layout="wide")
 
 st.title("🏛️ Bangladesh Education Policy — GraphRAG Assistant")
 st.caption("Multi-agent system powered by LLaMA 3.1 + ChromaDB + Knowledge Graph")
 
-# ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("Groq API Key", type="password")
@@ -30,7 +24,6 @@ with st.sidebar:
     st.markdown("💡 **ImpactAgent** — traces cause & effect")
     st.markdown("🛡️ **GroundingAgent** — verifies claims")
 
-# ── Policy Documents ──────────────────────────────────────
 policy_documents = [
     {"id":"doc_2015","year":2015,"title":"National Education Policy 2015",
      "content":"The Ministry of Education of Bangladesh approved the Girls Stipend Program expansion in 2015. The program allocated 500 crore BDT from the national budget to increase female enrollment. The Finance Ministry approved the budget under World Bank loan WB-2015-EDU. Target: increase girls enrollment by 20% in rural areas by 2018. Primary schools in Sylhet and Rajshahi divisions received priority funding. The policy was signed by Education Minister Abdul Momen on March 15, 2015."},
@@ -44,7 +37,6 @@ policy_documents = [
      "content":"Building on the Girls Stipend Program success a new Gender Equity in STEM initiative launched. Target: 40% female enrollment in engineering and technology programs by 2030. Budget allocation of 1200 crore BDT approved for the next 6 years. Digital literacy program expanded to cover all 64 districts of Bangladesh. UNICEF and UNESCO partnership renewed for teacher quality improvement. New metric: track not just enrollment but graduation and employment outcomes."}
 ]
 
-# ── Entity colors for graph ───────────────────────────────
 entity_colors = {
     "PROGRAM":      "#4CAF50",
     "PERSON":       "#2196F3",
@@ -55,14 +47,13 @@ entity_colors = {
     "OTHER":        "#9E9E9E"
 }
 
-# ── Load models (cached so it only runs once) ─────────────
 @st.cache_resource
 def load_models():
     embed_model   = SentenceTransformer("all-MiniLM-L6-v2")
     chroma_client = chromadb.Client()
     collection    = chroma_client.create_collection(
-        name     = "policy_docs",
-        metadata = {"hnsw:space": "cosine"}
+        name="policy_docs",
+        metadata={"hnsw:space": "cosine"}
     )
     all_chunks = []
     for doc in policy_documents:
@@ -72,7 +63,7 @@ def load_models():
             end   = min(start + 100, len(words))
             chunk = " ".join(words[start:end])
             all_chunks.append({
-                "chunk_id": f"{doc[\'id\']}_{start}",
+                "chunk_id": f"{doc['id']}_{start}",
                 "doc_id"  : doc["id"],
                 "year"    : doc["year"],
                 "title"   : doc["title"],
@@ -88,7 +79,6 @@ def load_models():
 
 embed_model, collection = load_models()
 
-# ── Graph helpers ─────────────────────────────────────────
 def build_graph(extracted_data):
     G = nx.DiGraph()
     for doc_id, data in extracted_data.items():
@@ -97,16 +87,16 @@ def build_graph(extracted_data):
             etype = entity.get("type", "OTHER").upper()
             if name and len(name) > 1:
                 G.add_node(name,
-                           entity_type = etype,
-                           color       = entity_colors.get(etype, "#9E9E9E"),
-                           doc_year    = data["year"])
+                           entity_type=etype,
+                           color=entity_colors.get(etype, "#9E9E9E"),
+                           doc_year=data["year"])
         for rel in data["relationships"]:
             src = rel.get("source", "").strip()
             tgt = rel.get("target", "").strip()
             if src and tgt and src in G.nodes and tgt in G.nodes:
                 G.add_edge(src, tgt,
-                           relation = rel.get("relation", "related_to"),
-                           year     = data["year"])
+                           relation=rel.get("relation", "related_to"),
+                           year=data["year"])
     return G
 
 def draw_graph(G):
@@ -122,8 +112,7 @@ def draw_graph(G):
                            arrows=True, arrowsize=15,
                            alpha=0.6, width=1.5, ax=ax)
     labels = {n: n for n, d in G.degree() if d >= 2}
-    nx.draw_networkx_labels(G, pos, labels,
-                            font_size=8, font_weight="bold", ax=ax)
+    nx.draw_networkx_labels(G, pos, labels, font_size=8, font_weight="bold", ax=ax)
     patches = [mpatches.Patch(color=c, label=t)
                for t, c in entity_colors.items() if t != "OTHER"]
     ax.legend(handles=patches, loc="upper left", fontsize=8)
@@ -131,7 +120,6 @@ def draw_graph(G):
     plt.tight_layout()
     return fig
 
-# ── Helpers ───────────────────────────────────────────────
 def retrieve(query, n=4):
     emb = embed_model.encode([query]).tolist()
     res = collection.query(query_embeddings=emb, n_results=n)
@@ -142,18 +130,17 @@ def retrieve(query, n=4):
 
 def ask_llm(client, system, user, max_tokens=250):
     r = client.chat.completions.create(
-        model       = "llama-3.1-8b-instant",
-        messages    = [{"role": "system", "content": system},
-                       {"role": "user",   "content": user}],
-        temperature = 0.3,
-        max_tokens  = max_tokens
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "system", "content": system},
+                  {"role": "user",   "content": user}],
+        temperature=0.3,
+        max_tokens=max_tokens
     )
     return r.choices[0].message.content
 
-# ── Tabs ──────────────────────────────────────────────────
 tab1, tab2 = st.tabs(["💬 Ask Agents", "🕸️ Knowledge Graph"])
 
-# ══════════════════ TAB 1 — Ask Agents ═══════════════════
+# ══════════════════ TAB 1 ═══════════════════════════════
 with tab1:
     st.divider()
     question = st.text_input(
@@ -172,39 +159,39 @@ with tab1:
             with col1:
                 with st.spinner("🕐 TimeAgent thinking..."):
                     ctx      = retrieve(question + " change over time year")
-                    ctx_text = "\\n\\n".join([f"[{c[\'year\']}] {c[\'text\']}" for c in ctx])
+                    ctx_text = "\n\n".join([f"[{c['year']}] {c['text']}" for c in ctx])
                     time_ans = ask_llm(client,
                         "You are a TimeAgent. Analyze changes over time. Mention specific years. Under 120 words.",
-                        f"Question: {question}\\n\\nContext:\\n{ctx_text}")
+                        f"Question: {question}\n\nContext:\n{ctx_text}")
                 st.subheader("🕐 Timeline Analysis")
                 st.write(time_ans)
 
                 with st.spinner("⚠️ ContradictionAgent thinking..."):
                     ctx2      = retrieve(question + " conflict contradiction inconsistency")
-                    ctx_text2 = "\\n\\n".join([f"[{c[\'year\']}] {c[\'text\']}" for c in ctx2])
+                    ctx_text2 = "\n\n".join([f"[{c['year']}] {c['text']}" for c in ctx2])
                     contra_ans = ask_llm(client,
                         "You are a ContradictionAgent. Find contradictions between documents. Say CONTRADICTION: if found. Under 120 words.",
-                        f"Question: {question}\\n\\nContext:\\n{ctx_text2}")
+                        f"Question: {question}\n\nContext:\n{ctx_text2}")
                 st.subheader("⚠️ Contradictions")
                 st.write(contra_ans)
 
             with col2:
                 with st.spinner("💡 ImpactAgent thinking..."):
                     ctx3      = retrieve(question + " impact outcome result caused")
-                    ctx_text3 = "\\n\\n".join([f"[{c[\'year\']}] {c[\'text\']}" for c in ctx3])
+                    ctx_text3 = "\n\n".join([f"[{c['year']}] {c['text']}" for c in ctx3])
                     impact_ans = ask_llm(client,
                         "You are an ImpactAgent. Trace cause-and-effect chains. Under 120 words.",
-                        f"Question: {question}\\n\\nContext:\\n{ctx_text3}")
+                        f"Question: {question}\n\nContext:\n{ctx_text3}")
                 st.subheader("💡 Impact Chain")
                 st.write(impact_ans)
 
                 with st.spinner("🛡️ GroundingAgent verifying..."):
                     combined  = time_ans + " " + contra_ans + " " + impact_ans
                     ctx4      = retrieve(question)
-                    ctx_text4 = "\\n\\n".join([f"[{c[\'year\']}] {c[\'text\']}" for c in ctx4])
+                    ctx_text4 = "\n\n".join([f"[{c['year']}] {c['text']}" for c in ctx4])
                     verify_ans = ask_llm(client,
                         "You are a GroundingAgent. Verify claims with ✅ VERIFIED, ❌ UNVERIFIED, or ⚠️ PARTIAL. Under 150 words.",
-                        f"Answer:\\n{combined}\\n\\nSources:\\n{ctx_text4}")
+                        f"Answer:\n{combined}\n\nSources:\n{ctx_text4}")
                 st.subheader("🛡️ Verification Report")
                 st.write(verify_ans)
 
@@ -212,7 +199,7 @@ with tab1:
             with st.spinner("📝 Writing final answer..."):
                 final = ask_llm(client,
                     "Synthesize the multi-agent analysis into one clean answer. Sections: 📅 Timeline, ⚠️ Contradictions, 💡 Impact, 🛡️ Confidence. Under 300 words.",
-                    f"Question: {question}\\n\\nTime: {time_ans}\\n\\nContradictions: {contra_ans}\\n\\nImpact: {impact_ans}\\n\\nVerification: {verify_ans}",
+                    f"Question: {question}\n\nTime: {time_ans}\n\nContradictions: {contra_ans}\n\nImpact: {impact_ans}\n\nVerification: {verify_ans}",
                     max_tokens=400)
             st.subheader("📊 Final Synthesized Answer")
             st.success(final)
@@ -220,7 +207,7 @@ with tab1:
     elif not api_key:
         st.info("👈 Enter your Groq API key in the sidebar to get started.")
 
-# ══════════════════ TAB 2 — Knowledge Graph ═══════════════
+# ══════════════════ TAB 2 ═══════════════════════════════
 with tab2:
     st.subheader("🕸️ Entity Knowledge Graph")
     st.caption("Extracted from all 5 policy documents — nodes sized by number of connections")
@@ -236,22 +223,22 @@ with tab2:
                 progress = st.progress(0)
 
                 for i, doc in enumerate(policy_documents):
-                    prompt = f"""Extract entities and relationships from this policy document (Year: {doc[\'year\']}).
+                    prompt = f"""Extract entities and relationships from this policy document (Year: {doc['year']}).
 Return ONLY valid JSON:
 {{
     "entities": [{{"name": "entity name", "type": "PROGRAM/PERSON/ORGANIZATION/BUDGET/POLICY/METRIC"}}],
     "relationships": [{{"source": "name1", "relation": "relation_type", "target": "name2"}}]
 }}
-Document: {doc[\'content\']}
+Document: {doc['content']}
 Return only JSON, nothing else."""
 
                     response = client.chat.completions.create(
-                        model       = "llama-3.1-8b-instant",
-                        messages    = [{"role": "user", "content": prompt}],
-                        temperature = 0.1,
-                        max_tokens  = 400
+                        model="llama-3.1-8b-instant",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.1,
+                        max_tokens=400
                     )
-                    raw = re.sub(r\'```json|```\', \'\', response.choices[0].message.content).strip()
+                    raw = re.sub(r'```json|```', '', response.choices[0].message.content).strip()
                     try:
                         result = json.loads(raw)
                     except Exception:
@@ -267,37 +254,18 @@ Return only JSON, nothing else."""
 
             G = build_graph(extracted_data)
 
-            # Metric cards
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Entities",      G.number_of_nodes())
             col2.metric("Total Relationships", G.number_of_edges())
             top_node = sorted(G.degree(), key=lambda x: x[1], reverse=True)[0]
             col3.metric("Most Connected Node", f"{top_node[0]} ({top_node[1]} links)")
 
-            # Draw graph
             fig = draw_graph(G)
             st.pyplot(fig)
 
-            # Top 10 table
             st.subheader("🏆 Top 10 Most Connected Entities")
             top10      = sorted(G.degree(), key=lambda x: x[1], reverse=True)[:10]
             table_data = [{"Entity"     : n,
                            "Type"       : G.nodes[n].get("entity_type", "UNKNOWN"),
                            "Connections": d} for n, d in top10]
             st.table(table_data)
-'''
-
-with open("graphrag_app/app.py", "w") as f:
-    f.write(app_code)
-
-print(f"✅ app.py fully updated!")
-print(f"   Size: {len(app_code)} characters")
-print("\n📋 What changed:")
-print("  + Added matplotlib + mpatches imports")
-print("  + Added entity_colors dictionary")
-print("  + Added build_graph() function")
-print("  + Added draw_graph() function")
-print("  + Removed G from load_models() return")
-print("  + Wrapped entire UI in 2 tabs:")
-print("      Tab 1: 💬 Ask Agents  (your original code)")
-print("      Tab 2: 🕸️ Knowledge Graph (new!)")
