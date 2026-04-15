@@ -311,18 +311,34 @@ def ask_llm(client, system, user, max_tokens=250):
     return r.choices[0].message.content
 
 # ── Tabs ──────────────────────────────────────────────────
+# ── Session state for chat history ───────────────────────
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
 tab1, tab2 = st.tabs(["💬 Ask Agents", "🕸️ Knowledge Graph"])
 
 # ══════════════════ TAB 1 ════════════════════════════════
 with tab1:
+
+    # ── Input area ───────────────────────────────────────
     st.divider()
     question = st.text_input(
         "💬 Ask a question about Bangladesh education policy:",
-        placeholder="e.g. How did girls enrollment change between 2015 and 2024?"
+        placeholder="e.g. How did girls enrollment change between 2015 and 2024?",
+        key="question_input"
     )
     st.caption("💡 Try: How did girls enrollment change between 2015 and 2024? | Are there any budget vs enrollment target conflicts? | What was the impact of the Girls Stipend Program?")
 
-    if st.button("🔍 Analyze", type="primary", disabled=not api_key):
+    btn_col1, btn_col2 = st.columns([1, 5])
+    with btn_col1:
+        analyze_clicked = st.button("🔍 Analyze", type="primary", disabled=not api_key)
+    with btn_col2:
+        if st.session_state.chat_history:
+            if st.button("🗑️ Clear History", type="secondary"):
+                st.session_state.chat_history = []
+                st.rerun()
+
+    if analyze_clicked:
         if not question:
             st.warning("Please enter a question!")
         else:
@@ -377,7 +393,18 @@ with tab1:
             st.subheader("📊 Final Synthesized Answer")
             st.success(final)
 
-            # ── Option E: PDF Export ──────────────────────
+            # ── Save to chat history ──────────────────────
+            st.session_state.chat_history.append({
+                "question"    : question,
+                "time"        : time_ans,
+                "contra"      : contra_ans,
+                "impact"      : impact_ans,
+                "verify"      : verify_ans,
+                "final"       : final,
+                "timestamp"   : datetime.now().strftime("%H:%M:%S"),
+            })
+
+            # ── PDF Export ────────────────────────────────
             st.divider()
             st.subheader("📥 Export Report")
             with st.spinner("Generating PDF report..."):
@@ -397,6 +424,39 @@ with tab1:
 
     elif not api_key:
         st.info("👈 Enter your Groq API key in the sidebar to get started.")
+
+    # ── Chat History Panel ────────────────────────────────
+    if st.session_state.chat_history:
+        st.divider()
+        st.subheader(f"📜 Session History ({len(st.session_state.chat_history)} question{'s' if len(st.session_state.chat_history) > 1 else ''})")
+
+        for idx, entry in enumerate(reversed(st.session_state.chat_history)):
+            order = len(st.session_state.chat_history) - idx
+            with st.expander(f"Q{order}  [{entry['timestamp']}]  {entry['question'][:80]}{'...' if len(entry['question']) > 80 else ''}", expanded=(idx == 0)):
+                h_col1, h_col2 = st.columns(2)
+                with h_col1:
+                    st.markdown("**🕐 Timeline**")
+                    st.write(entry["time"])
+                    st.markdown("**⚠️ Contradictions**")
+                    st.write(entry["contra"])
+                with h_col2:
+                    st.markdown("**💡 Impact Chain**")
+                    st.write(entry["impact"])
+                    st.markdown("**🛡️ Verification**")
+                    st.write(entry["verify"])
+                st.markdown("**📊 Final Answer**")
+                st.success(entry["final"])
+
+                # Re-download PDF for any past entry
+                try:
+                    pdf_b = generate_pdf_report(
+                        entry["question"], entry["time"], entry["contra"],
+                        entry["impact"], entry["verify"], entry["final"]
+                    )
+                    fname = f"policy_report_Q{order}.pdf"
+                    st.markdown(get_pdf_download_link(pdf_b, fname), unsafe_allow_html=True)
+                except Exception:
+                    pass
 
 # ══════════════════ TAB 2 ════════════════════════════════
 with tab2:
