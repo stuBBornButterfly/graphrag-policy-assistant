@@ -80,7 +80,34 @@ embed_model, collection = load_models()
 
 # ── PDF Report Generator ──────────────────────────────────
 def clean_text(text):
-    """Remove non-latin1 characters for FPDF compatibility."""
+    """Replace special Unicode characters for FPDF latin-1 compatibility."""
+    replacements = {
+        "—": "--",   # em dash
+        "–": "-",    # en dash
+        "‘": "'",    # left single quote
+        "’": "'",    # right single quote
+        "“": '"',    # left double quote
+        "”": '"',    # right double quote
+        "•": "*",    # bullet
+        "…": "...",  # ellipsis
+        "✅": "[OK]", # checkmark emoji
+        "❌": "[X]",  # cross emoji
+        "⚠": "[!]",  # warning emoji
+        "·": "-",    # middle dot
+        "→": "->",   # right arrow
+        "←": "<-",   # left arrow
+        "é": "e",    # e acute
+        "è": "e",    # e grave
+        "ê": "e",    # e circumflex
+        "à": "a",    # a grave
+        "â": "a",    # a circumflex
+        "ô": "o",    # o circumflex
+        "û": "u",    # u circumflex
+        "î": "i",    # i circumflex
+        "’": "'",    # right single quotation mark
+    }
+    for char, replacement in replacements.items():
+        text = text.replace(char, replacement)
     return text.encode("latin-1", errors="replace").decode("latin-1")
 
 def generate_pdf_report(question, time_ans, contra_ans, impact_ans, verify_ans, final_ans):
