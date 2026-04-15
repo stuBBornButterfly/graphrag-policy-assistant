@@ -16,6 +16,65 @@ st.set_page_config(page_title="Policy GraphRAG", page_icon="🏛️", layout="wi
 st.title("🏛️ Bangladesh Education Policy — GraphRAG Assistant")
 st.caption("Multi-agent system powered by LLaMA 3.1 + ChromaDB + Knowledge Graph")
 
+# ── Policy Documents ──────────────────────────────────────
+policy_documents = [
+    {"id":"doc_2015","year":2015,"title":"National Education Policy 2015",
+     "content":"The Ministry of Education of Bangladesh approved the Girls Stipend Program expansion in 2015. The program allocated 500 crore BDT from the national budget to increase female enrollment. The Finance Ministry approved the budget under World Bank loan WB-2015-EDU. Target: increase girls enrollment by 20% in rural areas by 2018. Primary schools in Sylhet and Rajshahi divisions received priority funding. The policy was signed by Education Minister Abdul Momen on March 15, 2015."},
+    {"id":"doc_2018","year":2018,"title":"Education Progress Report 2018",
+     "content":"Girls enrollment increased by 18% in rural areas, slightly below the 20% target set in 2015. The Girls Stipend Program was extended until 2022 with increased funding of 750 crore BDT. UNICEF partnership was established to provide teacher training in 500 schools. Dropout rate decreased from 35% to 22% between 2015 and 2018. The Finance Ministry noted budget overrun of 50 crore BDT due to inflation. Secondary school enrollment for girls rose by 25% in Dhaka division."},
+    {"id":"doc_2019","year":2019,"title":"Annual Budget Review 2019",
+     "content":"The Finance Ministry allocated 600 crore BDT for education, which is 20% less than 2018. However the Education Ministry set a target to increase enrollment by 30% by 2022. The reduced budget conflicts with the expanded enrollment target. Digital classroom initiative launched in 1000 schools using ICT funds of 100 crore BDT. Teacher salary increase of 10% approved to reduce teacher shortage in rural areas. World Bank loan WB-2015-EDU was fully disbursed by December 2019."},
+    {"id":"doc_2022","year":2022,"title":"Decade Review 2012-2022",
+     "content":"Overall girls enrollment increased by 31% between 2015 and 2022, exceeding original targets. The Girls Stipend Program is credited as the primary driver of enrollment growth. Literacy rate for women aged 15-24 rose from 65% to 84% over the decade. Budget constraints in 2019 caused a temporary slowdown in school construction. 36000 new classrooms were built across Bangladesh using JICA funding. Net enrollment rate reached 98% for primary school aged children."},
+    {"id":"doc_2024","year":2024,"title":"National Education Strategy 2024-2030",
+     "content":"Building on the Girls Stipend Program success a new Gender Equity in STEM initiative launched. Target: 40% female enrollment in engineering and technology programs by 2030. Budget allocation of 1200 crore BDT approved for the next 6 years. Digital literacy program expanded to cover all 64 districts of Bangladesh. UNICEF and UNESCO partnership renewed for teacher quality improvement. New metric: track not just enrollment but graduation and employment outcomes."}
+]
+
+# ── Entity colors ─────────────────────────────────────────
+entity_colors = {
+    "PROGRAM":      "#4CAF50",
+    "PERSON":       "#2196F3",
+    "ORGANIZATION": "#FF9800",
+    "BUDGET":       "#F44336",
+    "POLICY":       "#9C27B0",
+    "METRIC":       "#00BCD4",
+    "OTHER":        "#9E9E9E"
+}
+
+# ── Load models ───────────────────────────────────────────
+@st.cache_resource
+def load_models():
+    embed_model   = SentenceTransformer("all-MiniLM-L6-v2")
+    chroma_client = chromadb.Client()
+    collection    = chroma_client.create_collection(
+        name="policy_docs",
+        metadata={"hnsw:space": "cosine"}
+    )
+    all_chunks = []
+    for doc in policy_documents:
+        words = doc["content"].split()
+        start = 0
+        while start < len(words):
+            end   = min(start + 100, len(words))
+            chunk = " ".join(words[start:end])
+            all_chunks.append({
+                "chunk_id": f"{doc['id']}_{start}",
+                "doc_id"  : doc["id"],
+                "year"    : doc["year"],
+                "title"   : doc["title"],
+                "text"    : chunk
+            })
+            start += 80
+    texts      = [c["text"]     for c in all_chunks]
+    ids        = [c["chunk_id"] for c in all_chunks]
+    metadatas  = [{"doc_id": c["doc_id"], "year": c["year"], "title": c["title"]} for c in all_chunks]
+    embeddings = embed_model.encode(texts).tolist()
+    collection.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
+    return embed_model, collection
+
+# ✅ MUST be before sidebar
+embed_model, collection = load_models()
+
 # ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Settings")
@@ -87,64 +146,6 @@ with st.sidebar:
     st.markdown("⚠️ **ContradictionAgent** — finds conflicts")
     st.markdown("💡 **ImpactAgent** — traces cause & effect")
     st.markdown("🛡️ **GroundingAgent** — verifies claims")
-
-# ── Policy Documents ──────────────────────────────────────
-policy_documents = [
-    {"id":"doc_2015","year":2015,"title":"National Education Policy 2015",
-     "content":"The Ministry of Education of Bangladesh approved the Girls Stipend Program expansion in 2015. The program allocated 500 crore BDT from the national budget to increase female enrollment. The Finance Ministry approved the budget under World Bank loan WB-2015-EDU. Target: increase girls enrollment by 20% in rural areas by 2018. Primary schools in Sylhet and Rajshahi divisions received priority funding. The policy was signed by Education Minister Abdul Momen on March 15, 2015."},
-    {"id":"doc_2018","year":2018,"title":"Education Progress Report 2018",
-     "content":"Girls enrollment increased by 18% in rural areas, slightly below the 20% target set in 2015. The Girls Stipend Program was extended until 2022 with increased funding of 750 crore BDT. UNICEF partnership was established to provide teacher training in 500 schools. Dropout rate decreased from 35% to 22% between 2015 and 2018. The Finance Ministry noted budget overrun of 50 crore BDT due to inflation. Secondary school enrollment for girls rose by 25% in Dhaka division."},
-    {"id":"doc_2019","year":2019,"title":"Annual Budget Review 2019",
-     "content":"The Finance Ministry allocated 600 crore BDT for education, which is 20% less than 2018. However the Education Ministry set a target to increase enrollment by 30% by 2022. The reduced budget conflicts with the expanded enrollment target. Digital classroom initiative launched in 1000 schools using ICT funds of 100 crore BDT. Teacher salary increase of 10% approved to reduce teacher shortage in rural areas. World Bank loan WB-2015-EDU was fully disbursed by December 2019."},
-    {"id":"doc_2022","year":2022,"title":"Decade Review 2012-2022",
-     "content":"Overall girls enrollment increased by 31% between 2015 and 2022, exceeding original targets. The Girls Stipend Program is credited as the primary driver of enrollment growth. Literacy rate for women aged 15-24 rose from 65% to 84% over the decade. Budget constraints in 2019 caused a temporary slowdown in school construction. 36000 new classrooms were built across Bangladesh using JICA funding. Net enrollment rate reached 98% for primary school aged children."},
-    {"id":"doc_2024","year":2024,"title":"National Education Strategy 2024-2030",
-     "content":"Building on the Girls Stipend Program success a new Gender Equity in STEM initiative launched. Target: 40% female enrollment in engineering and technology programs by 2030. Budget allocation of 1200 crore BDT approved for the next 6 years. Digital literacy program expanded to cover all 64 districts of Bangladesh. UNICEF and UNESCO partnership renewed for teacher quality improvement. New metric: track not just enrollment but graduation and employment outcomes."}
-]
-
-# ── Entity colors ─────────────────────────────────────────
-entity_colors = {
-    "PROGRAM":      "#4CAF50",
-    "PERSON":       "#2196F3",
-    "ORGANIZATION": "#FF9800",
-    "BUDGET":       "#F44336",
-    "POLICY":       "#9C27B0",
-    "METRIC":       "#00BCD4",
-    "OTHER":        "#9E9E9E"
-}
-
-# ── Load models ───────────────────────────────────────────
-@st.cache_resource
-def load_models():
-    embed_model   = SentenceTransformer("all-MiniLM-L6-v2")
-    chroma_client = chromadb.Client()
-    collection    = chroma_client.create_collection(
-        name="policy_docs",
-        metadata={"hnsw:space": "cosine"}
-    )
-    all_chunks = []
-    for doc in policy_documents:
-        words = doc["content"].split()
-        start = 0
-        while start < len(words):
-            end   = min(start + 100, len(words))
-            chunk = " ".join(words[start:end])
-            all_chunks.append({
-                "chunk_id": f"{doc['id']}_{start}",
-                "doc_id"  : doc["id"],
-                "year"    : doc["year"],
-                "title"   : doc["title"],
-                "text"    : chunk
-            })
-            start += 80
-    texts      = [c["text"]     for c in all_chunks]
-    ids        = [c["chunk_id"] for c in all_chunks]
-    metadatas  = [{"doc_id": c["doc_id"], "year": c["year"], "title": c["title"]} for c in all_chunks]
-    embeddings = embed_model.encode(texts).tolist()
-    collection.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
-    return embed_model, collection
-
-embed_model, collection = load_models()
 
 # ── Graph helpers ─────────────────────────────────────────
 def build_graph(extracted_data):
@@ -325,7 +326,7 @@ Return only JSON, nothing else."""
             G = build_graph(extracted_data)
 
             if G.number_of_nodes() == 0:
-                st.error("⚠️ No entities extracted. The LLM returned unparseable JSON. Try clicking Build again.")
+                st.error("⚠️ No entities extracted. Try clicking Build again.")
             else:
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Total Entities",      G.number_of_nodes())
