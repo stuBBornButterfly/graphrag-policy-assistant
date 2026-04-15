@@ -16,8 +16,94 @@ import base64
 
 st.set_page_config(page_title="Policy GraphRAG", page_icon="🏛️", layout="wide")
 
-st.title("🏛️ Bangladesh Education Policy — GraphRAG Assistant")
-st.caption("Multi-agent system powered by LLaMA 3.1 + ChromaDB + Knowledge Graph")
+# ── Custom CSS ────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Agent cards */
+.agent-card {
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 10px;
+    border-left: 5px solid;
+}
+.agent-time   { background:#e8f5e9; border-color:#2e7d32; }
+.agent-contra { background:#fff3e0; border-color:#e65100; }
+.agent-impact { background:#e3f2fd; border-color:#1565c0; }
+.agent-ground { background:#f3e5f5; border-color:#6a1b9a; }
+.agent-card h4 { margin:0 0 6px 0; font-size:16px; }
+.agent-card p  { margin:0; font-size:13px; color:#555; }
+
+/* Doc table rows */
+.doc-row {
+    display:flex; align-items:center; gap:12px;
+    padding:10px 14px; border-radius:8px;
+    margin-bottom:6px; background:#f8f9fa;
+    border:1px solid #e0e0e0;
+}
+.doc-year {
+    background:#1f6aa5; color:white;
+    border-radius:6px; padding:3px 10px;
+    font-weight:700; font-size:13px; min-width:42px;
+    text-align:center;
+}
+.doc-title { font-size:14px; font-weight:600; flex:1; }
+.doc-tag {
+    background:#e3f2fd; color:#1565c0;
+    border-radius:20px; padding:2px 10px;
+    font-size:12px;
+}
+
+/* Stat boxes */
+.stat-box {
+    background: linear-gradient(135deg, #1f6aa5, #15487a);
+    color:white; border-radius:12px;
+    padding:16px; text-align:center;
+}
+.stat-box .stat-num { font-size:32px; font-weight:800; }
+.stat-box .stat-lbl { font-size:12px; opacity:0.85; margin-top:2px; }
+
+/* Section header pill */
+.section-pill {
+    display:inline-block;
+    background:#1f6aa5; color:white;
+    border-radius:20px; padding:4px 16px;
+    font-size:13px; font-weight:600;
+    margin-bottom:14px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ── Hero Header ───────────────────────────────────────────
+st.markdown("""
+<div style="background:linear-gradient(135deg,#1f6aa5,#0d3b6e);
+            border-radius:16px; padding:28px 32px; margin-bottom:24px; color:white;">
+  <div style="font-size:13px;opacity:0.75;margin-bottom:6px;letter-spacing:1px;">
+    MULTI-AGENT AI SYSTEM
+  </div>
+  <h1 style="margin:0;font-size:28px;font-weight:800;">
+    🏛️ Bangladesh Education Policy
+  </h1>
+  <h2 style="margin:4px 0 10px 0;font-size:20px;font-weight:400;opacity:0.9;">
+    GraphRAG Assistant
+  </h2>
+  <p style="margin:0;opacity:0.8;font-size:14px;max-width:620px;">
+    Four specialized AI agents analyze policy documents across time, contradictions,
+    causal chains, and source verification — simultaneously.
+  </p>
+  <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+    <span style="background:rgba(255,255,255,0.15);border-radius:20px;
+                 padding:4px 12px;font-size:12px;">LLaMA 3.1 via Groq</span>
+    <span style="background:rgba(255,255,255,0.15);border-radius:20px;
+                 padding:4px 12px;font-size:12px;">ChromaDB Vector Store</span>
+    <span style="background:rgba(255,255,255,0.15);border-radius:20px;
+                 padding:4px 12px;font-size:12px;">Knowledge Graph</span>
+    <span style="background:rgba(255,255,255,0.15);border-radius:20px;
+                 padding:4px 12px;font-size:12px;">PDF Export</span>
+    <span style="background:rgba(255,255,255,0.15);border-radius:20px;
+                 padding:4px 12px;font-size:12px;">Session History</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Policy Documents ──────────────────────────────────────
 policy_documents = [
@@ -244,10 +330,29 @@ with st.sidebar:
 
     st.divider()
     st.markdown("### 🤖 Active Agents")
-    st.markdown("🕐 **TimeAgent** — tracks changes over time")
-    st.markdown("⚠️ **ContradictionAgent** — finds conflicts")
-    st.markdown("💡 **ImpactAgent** — traces cause & effect")
-    st.markdown("🛡️ **GroundingAgent** — verifies claims")
+    st.markdown("""
+<div class="agent-card agent-time">
+  <h4>🕐 TimeAgent</h4>
+  <p>Tracks how policies changed across years</p>
+</div>
+<div class="agent-card agent-contra">
+  <h4>⚠️ ContradictionAgent</h4>
+  <p>Finds conflicts between documents</p>
+</div>
+<div class="agent-card agent-impact">
+  <h4>💡 ImpactAgent</h4>
+  <p>Traces cause-and-effect chains</p>
+</div>
+<div class="agent-card agent-ground">
+  <h4>🛡️ GroundingAgent</h4>
+  <p>Verifies claims against source documents</p>
+</div>
+""", unsafe_allow_html=True)
+    st.divider()
+    st.markdown("### 📚 Knowledge Base")
+    st.markdown(f"**{len(policy_documents)} built-in documents**")
+    for doc in policy_documents:
+        st.markdown(f"- `{doc['year']}` {doc['title']}")
 
 # ── Graph helpers ─────────────────────────────────────────
 def build_graph(extracted_data):
@@ -315,7 +420,7 @@ def ask_llm(client, system, user, max_tokens=250):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-tab1, tab2 = st.tabs(["💬 Ask Agents", "🕸️ Knowledge Graph"])
+tab1, tab2, tab3 = st.tabs(["💬 Ask Agents", "🕸️ Knowledge Graph", "📖 About"])
 
 # ══════════════════ TAB 1 ════════════════════════════════
 with tab1:
@@ -523,3 +628,132 @@ Return only JSON, nothing else."""
                                "Type"       : G.nodes[n].get("entity_type", "UNKNOWN"),
                                "Connections": d} for n, d in top10]
                 st.table(table_data)
+
+# ══════════════════ TAB 3: ABOUT ═════════════════════════
+with tab3:
+
+    # ── Stats row ─────────────────────────────────────────
+    st.markdown('<div class="section-pill">📊 System Overview</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown("""<div class="stat-box">
+            <div class="stat-num">4</div>
+            <div class="stat-lbl">AI Agents</div></div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown("""<div class="stat-box">
+            <div class="stat-num">5</div>
+            <div class="stat-lbl">Policy Docs</div></div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown("""<div class="stat-box">
+            <div class="stat-num">10</div>
+            <div class="stat-lbl">Years Covered</div></div>""", unsafe_allow_html=True)
+    with c4:
+        st.markdown("""<div class="stat-box">
+            <div class="stat-num">8B</div>
+            <div class="stat-lbl">LLaMA Params</div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Agent cards ───────────────────────────────────────
+    st.markdown('<div class="section-pill">🤖 The Four Agents</div>', unsafe_allow_html=True)
+    a1, a2 = st.columns(2)
+    with a1:
+        st.markdown("""
+<div class="agent-card agent-time">
+  <h4>🕐 TimeAgent</h4>
+  <p><b>Temporal Analysis</b> — Retrieves context anchored to specific years and tracks
+  how policies, budgets, and outcomes evolved from 2015 to 2024. Always cites exact years.</p>
+</div>
+<div class="agent-card agent-impact">
+  <h4>💡 ImpactAgent</h4>
+  <p><b>Causal Reasoning</b> — Traces cause-and-effect chains from policy decisions to
+  measurable outcomes. Identifies what drove changes in enrollment, funding, and access.</p>
+</div>
+""", unsafe_allow_html=True)
+    with a2:
+        st.markdown("""
+<div class="agent-card agent-contra">
+  <h4>⚠️ ContradictionAgent</h4>
+  <p><b>Conflict Detection</b> — Compares documents for logical inconsistencies, mismatched
+  targets, and budget conflicts. Prefixes every finding with <code>CONTRADICTION:</code>.</p>
+</div>
+<div class="agent-card agent-ground">
+  <h4>🛡️ GroundingAgent</h4>
+  <p><b>Claim Verification</b> — Cross-references all three agents' outputs against raw
+  source documents. Labels each claim as <code>VERIFIED</code>, <code>PARTIAL</code>,
+  or <code>UNVERIFIED</code>.</p>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Document table ────────────────────────────────────
+    st.markdown('<div class="section-pill">📚 Built-in Knowledge Base</div>', unsafe_allow_html=True)
+
+    doc_tags = {
+        2015: ("Budget", "Stipend Program"),
+        2018: ("Progress", "UNICEF Partnership"),
+        2019: ("Budget Cut", "Contradiction"),
+        2022: ("Decade Review", "Milestone"),
+        2024: ("Strategy", "STEM Equity"),
+    }
+    for doc in policy_documents:
+        tag1, tag2 = doc_tags.get(doc["year"], ("Policy", "Document"))
+        st.markdown(f"""
+<div class="doc-row">
+  <span class="doc-year">{doc['year']}</span>
+  <span class="doc-title">{doc['title']}</span>
+  <span class="doc-tag">{tag1}</span>
+  <span class="doc-tag">{tag2}</span>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Architecture ──────────────────────────────────────
+    st.markdown('<div class="section-pill">🔧 Architecture</div>', unsafe_allow_html=True)
+    st.code("""
+User Question
+     │
+     ▼
+ChromaDB Vector Store  (all-MiniLM-L6-v2 embeddings)
+     │  top-k retrieval per agent (independent)
+     ▼
+┌────────────────────────────────────────────┐
+│            Multi-Agent Layer               │
+│  TimeAgent   ContradictionAgent            │
+│  ImpactAgent   GroundingAgent              │
+│       (LLaMA 3.1 via Groq API)             │
+└──────────────────┬─────────────────────────┘
+                   │
+                   ▼
+          Synthesis Agent
+          Final structured answer
+                   │
+          ┌────────┴────────┐
+          ▼                 ▼
+     PDF Export      Session History
+""", language="text")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Tech stack ────────────────────────────────────────
+    st.markdown('<div class="section-pill">🛠️ Tech Stack</div>', unsafe_allow_html=True)
+    t1, t2, t3 = st.columns(3)
+    with t1:
+        st.markdown("**AI / ML**")
+        st.markdown("- LLaMA 3.1 8B (Groq)")
+        st.markdown("- sentence-transformers")
+        st.markdown("- all-MiniLM-L6-v2")
+    with t2:
+        st.markdown("**Storage / Graph**")
+        st.markdown("- ChromaDB (vector store)")
+        st.markdown("- NetworkX (graph)")
+        st.markdown("- Matplotlib")
+    with t3:
+        st.markdown("**App / Export**")
+        st.markdown("- Streamlit")
+        st.markdown("- fpdf2 (PDF export)")
+        st.markdown("- PyPDF2 (ingestion)")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.info("💡 **Tip:** Upload your own PDFs in the sidebar and they are instantly embedded into the vector store — no restart needed.", icon="📄")
